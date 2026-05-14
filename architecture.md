@@ -5,6 +5,7 @@ picosum/
 ├── .devcontainer/  
 │ ├── devcontainer.json  
 │ └── docker-compose.yml  
+├── Caddyfile (reverse proxy : routage, sécurité, HTTPS commenté)  
 ├── web-app/  
 │ ├── Dockerfile  
 │ ├── go.mod  
@@ -16,7 +17,9 @@ picosum/
 │ ├── static/  
 │ │ ├── index.html  
 │ │ ├── pico.min.css  
-│ │ └── alpine.min.js (optionnel, si embarqué)  
+│ │ ├── htmx.min.js  
+│ │ ├── app.js (validation vanilla JS)  
+│ │ └── app.css  
 │ └── internal/  
 │ └── client/  
 │ └── api_client.go  
@@ -27,9 +30,9 @@ picosum/
 │ ├── handlers/  
 │ │ └── sum.go  
 │ ├── middleware/  
-│ │ ├── auth.go (validation token fixe)  
+│ │ ├── auth.go (validation token fixe, HMAC-SHA256)  
 │ │ └── request_id.go  
-│ ├── docs/ (généré par swag init)  
+│ ├── docs/ (docs.go écrit manuellement)  
 │ └── internal/  
 │ └── calculator/  
 │ └── sum.go  
@@ -45,16 +48,17 @@ picosum/
 text
 
 ## Choix technologiques avec justifications
-| Technologie | Utilisation | Justification (POC 1 jour) |
-|-------------|-------------|-----------------------------|
+| Technologie | Utilisation | Justification |
+|-------------|-------------|---------------|
 | Go 1.21+ | Langage principal | Simplicité, écosystème riche, binaires statiques |
-| Fiber v2 | Framework HTTP (web-app + api-service) | Performance, facile à prendre en main, middleware natif |
-| HTMX | Interactions AJAX | Réduit le JS à écrire, s’intègre bien avec Alpine |
-| Alpine.js | État local et validation UI | Léger (<15ko), réactif sans framework lourd |
-| Pico.css | Style CSS | Moderne, responsive, sans classes, facilite l’embarquement |
-| `//go:embed` | Embarquement des assets | Binaire unique, déploiement simple |
-| Swaggo | Documentation OpenAPI | Génération automatique, standard Go |
-| `log/slog` | Logs structurés | Natif en Go 1.21, format JSON, niveaux de log |
+| Fiber v2 | Framework HTTP (web-app + api-service + oauth-server) | Performance, middleware natif, `app.Test()` pour les tests |
+| Caddy 2 | Reverse proxy | Configuration déclarative, HTTPS automatique (Let’s Encrypt/ZeroSSL) sans plugin |
+| HTMX | Interactions AJAX | Réduit le JS, échange de fragments HTML |
+| Vanilla JS | Validation UI | Remplace Alpine.js pour satisfaire la CSP `script-src ‘self’` sans `unsafe-eval` |
+| Pico.css | Style CSS | Moderne, responsive, sans classes, embarquable |
+| `//go:embed` | Embarquement des assets | Binaire unique, déploiement sans volume de fichiers |
+| Swaggo | Documentation OpenAPI | Standard Go pour OpenAPI ; `docs.go` écrit manuellement (swag CLI absent) |
+| `log/slog` | Logs structurés | Natif Go 1.21, format JSON, niveaux réglables par env |
 | `testify` | Tests unitaires | Assertions claires, largement utilisé |
 | Docker Compose | Orchestration locale | Idéal pour POC multi-containers |
 ## Patterns et conventions
@@ -92,22 +96,32 @@ text
 
 ### Diagramme des containers
 
-+-------------+ HTTP +---------------+ HTTP +----------------+  
-| web-app | ------------> | api-service | ------------> | oauth-server |  
-| :8080 | (avec token) | :8081 | (vérif token) | (optionnel) |  
-+-------------+ +---------------+ +----------------+  
-| |  
-| (logs) | (logs)  
-v v  
-stdout JSON stdout JSON
+                          poc-net (bridge Docker)
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  ┌──────────┐   /swagger/*   ┌─────────────┐                   │
+│  │          │ ─────────────► │ api-service │                   │
+│  │  caddy   │                │    :8081    │                   │
+│  │  :80 ◄───┤ (public)       └─────────────┘                   │
+│  │          │   /*           ┌─────────────┐   ┌────────────┐  │
+│  │          │ ─────────────► │   web-app   │──►│   oauth    │  │
+│  └──────────┘                │    :8080    │   │   :8082    │  │
+│                              └─────────────┘   └────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+
+Tous les services écrivent leurs logs sur stdout (JSON).
+X-Forwarded-For propagé par Caddy → lu par le rate limiter des services Go.
 
 text
 
 ## Stratégie de déploiement (Docker Compose)
-- Le fichier `docker-compose.yml` définit trois services : `web`, `api`, `oauth`.
-- Utilisation d’un réseau bridge `poc-net` pour la communication.
+- Le fichier `docker-compose.yml` définit quatre services : `caddy`, `web`, `api`, `oauth`.
+- **Caddy** est le seul point d’entrée public (port 80). En production VPS, décommenter le port 443 et remplacer `:80` par le nom de domaine dans le `Caddyfile` pour activer le HTTPS automatique via Let’s Encrypt ou ZeroSSL.
+- **web-app** et **api-service** n’exposent plus de port public ; ils communiquent uniquement sur le réseau bridge `poc-net`.
+- `TRUSTED_PROXY_HEADER=X-Forwarded-For` configuré sur les services Go pour que le rate limiting lise l’IP réelle propagée par Caddy.
+- Volumes `caddy_data` et `caddy_config` pour la persistance des certificats TLS (inactifs en mode HTTP local).
+- Utilisation d’un réseau bridge `poc-net` pour l’isolation inter-services.
 - Les dépendances sont gérées par `depends_on` (ordre de démarrage).
-- Les binaires Go sont compilés dans des conteneurs multi-stage pour réduire la taille.
-- Les ports exposés : `8080:8080` (web-app) accessible depuis l’hôte.
+- Les binaires Go sont compilés dans des conteneurs multi-stage (`scratch`) pour minimiser la surface d’attaque.
 ## Gestion des logs centralisée
 Bien que non obligatoire pour la POC, chaque conteneur écrit ses logs sur stdout. Docker Compose les collecte et les affiche avec `docker-compose logs`. Pour corréler les requêtes, le `X-Request-ID` est présent dans les logs des trois services.

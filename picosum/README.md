@@ -5,12 +5,14 @@ POC microservices Go — calculatrice distribuée avec authentification OAuth2 s
 ## Architecture
 
 ```
-[Navigateur] → [web-app:8080] → [api-service:8081]
-                                      ↑
-                               [oauth-server:8082]
+[Navigateur] → [Caddy:80] ──┬──→ [web-app:8080]
+                             └──→ [api-service:8081]  (/swagger/*)
+                                         ↑
+                                  [oauth-server:8082]
 ```
 
-Trois services indépendants, chacun un binaire Go compilé statiquement.
+Quatre services : un reverse proxy Caddy et trois services Go compilés statiquement.  
+Caddy est le seul point d'entrée public — web-app et api-service ne sont pas exposés directement.
 
 ## Démarrage rapide
 
@@ -25,11 +27,11 @@ Trois services indépendants, chacun un binaire Go compilé statiquement.
 docker-compose up --build
 ```
 
-| Service    | URL                                      | Description         |
-|------------|------------------------------------------|---------------------|
-| web-app    | http://localhost:8080                    | Interface utilisateur |
-| api-service | http://localhost:8081/swagger/index.html | Documentation Swagger |
-| oauth-server | http://localhost:8082/token (POST)      | Token OAuth2 (POC)  |
+| URL                                   | Description              |
+|---------------------------------------|--------------------------|
+| http://localhost                      | Interface utilisateur     |
+| http://localhost/swagger/index.html   | Documentation Swagger API |
+| http://localhost:8082/token (POST)    | Token OAuth2 — dev only   |
 
 ### Développement local (sans Docker)
 
@@ -94,18 +96,19 @@ Le fichier `docs/docs.go` est inclus manuellement pour la POC.
 
 ```
 picosum/
+├── Caddyfile           # Reverse proxy : routage web + Swagger, HTTPS commenté
+├── docker-compose.yml
 ├── api-service/        # Service API (GET /sum, Swagger)
 │   ├── handlers/       # Handler HTTP
 │   ├── middleware/     # Auth + Request-ID
 │   ├── internal/calculator/  # Logique métier pure
 │   └── docs/           # Documentation Swagger
-├── web-app/            # Application web (HTML/HTMX/Alpine.js)
+├── web-app/            # Application web (HTML/HTMX/Pico.css)
 │   ├── handlers/       # Handler formulaire
 │   ├── middleware/     # Request-ID
 │   ├── internal/client/  # Client HTTP vers api-service
-│   └── static/         # Assets embarqués (pico.css, alpine.js, htmx.js)
+│   └── static/         # Assets embarqués (pico.css, htmx.js, app.js)
 ├── oauth-server/       # Serveur OAuth2 minimal
 │   └── handlers/       # Endpoint /token
-├── docker-compose.yml
 └── README.md
 ```

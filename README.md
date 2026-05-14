@@ -10,16 +10,18 @@ une calculatrice (A + B) décomposée en trois services indépendants.
 ## Architecture
 
 ```
-[Navigateur] → [web-app:8080] → [api-service:8081]
-                                      ↑
-                               [oauth-server:8082]
+[Navigateur] → [Caddy:80] ──┬──→ [web-app:8080]
+                             └──→ [api-service:8081]  (/swagger/*)
+                                         ↑
+                                  [oauth-server:8082]
 ```
 
-| Service        | Port | Rôle                                      |
-|----------------|------|-------------------------------------------|
-| `web-app`      | 8080 | Interface HTMX + Pico.css                 |
-| `api-service`  | 8081 | API REST Go + Swagger + AuthMiddleware    |
-| `oauth-server` | 8082 | Serveur OAuth2 simplifié (token fixe POC) |
+| Service        | Port (interne) | Rôle                                          |
+|----------------|----------------|-----------------------------------------------|
+| `caddy`        | 80 (public)    | Reverse proxy, routage, en-têtes de sécurité  |
+| `web-app`      | 8080           | Interface HTMX + Pico.css (interne)           |
+| `api-service`  | 8081           | API REST Go + Swagger + AuthMiddleware         |
+| `oauth-server` | 8082           | Serveur OAuth2 simplifié (token fixe POC)     |
 
 ## Démarrage rapide
 
@@ -28,8 +30,8 @@ cd picosum
 docker-compose up --build
 ```
 
-Interface : http://localhost:8080  
-Swagger API : http://localhost:8081/swagger/index.html
+Interface : http://localhost  
+Swagger API : http://localhost/swagger/index.html
 
 ## Sécurité
 
@@ -45,10 +47,11 @@ Points clés :
 ## Structure du dépôt
 
 ```
-├── picosum/              # Code source des 3 services Go
-│   ├── api-service/
-│   ├── web-app/
-│   ├── oauth-server/
+├── picosum/              # Code source des services
+│   ├── api-service/      # API REST Go + Swagger
+│   ├── web-app/          # Interface HTMX + Pico.css
+│   ├── oauth-server/     # Serveur OAuth2 simplifié
+│   ├── Caddyfile         # Configuration du reverse proxy
 │   └── docker-compose.yml
 ├── sec-audit.md          # Journal des corrections de sécurité
 ├── architecture.md       # Décisions d'architecture
