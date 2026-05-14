@@ -1,0 +1,36 @@
+# Binaires Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+picosum/web-app/web-app
+picosum/api-service/api-service
+picosum/oauth-server/oauth-server
+
+# Fichiers de test Go
+*.test
+*.out
+
+# Dossiers de build
+vendor/
+
+# Fichiers de débogage
+*.pprof
+
+# Éditeurs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Variables d'environnement sensibles
+.env
+*.env.local
+
+# Logs
+*.log

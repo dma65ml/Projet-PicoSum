@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PicoSum – Calculatrice</title>
+    <!-- N4 : plus de balise <style> inline — styles dans app.css pour CSP sans unsafe-inline -->
+    <link rel="stylesheet" href="/static/pico.min.css">
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+    <main class="container app-container">
+        <hgroup>
+            <h1>PicoSum</h1>
+            <p>Démonstration d'une architecture microservices Go (POC)</p>
+        </hgroup>
+
+        <article>
+            <!-- N4 : pas d'attributs oninput="..." inline — événements attachés dans app.js -->
+            <form hx-post="/sum"
+                  hx-target="#result"
+                  hx-swap="innerHTML"
+                  hx-indicator="#result">
+
+                <div class="grid">
+                    <label>
+                        Valeur A (0 – 10)
+                        <input type="number"
+                               id="input-a"
+                               name="a"
+                               min="0" max="10"
+                               placeholder="ex: 5"
+                               required>
+                        <small id="a-error" class="error-msg">
+                            A doit être un entier entre 0 et 10
+                        </small>
+                    </label>
+
+                    <label>
+                        Valeur B (0 – 10)
+                        <input type="number"
+                               id="input-b"
+                               name="b"
+                               min="0" max="10"
+                               placeholder="ex: 3"
+                               required>
+                        <small id="b-error" class="error-msg">
+                            B doit être un entier entre 0 et 10
+                        </small>
+                    </label>
+                </div>
+
+                <button id="submit-btn" type="submit" disabled>
+                    Calculer A + B
+                </button>
+            </form>
+
+            <div id="result" role="status" aria-live="polite"></div>
+        </article>
+
+        <footer>
+            <small>
+                <a href="http://localhost:8081/swagger/index.html"
+                   target="_blank" rel="noopener noreferrer">
+                    Documentation API Swagger ↗
+                </a>
+            </small>
+        </footer>
+    </main>
+
+    <!-- N4 : HTMX seul, Alpine.js supprimé (plus besoin de unsafe-eval) -->
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

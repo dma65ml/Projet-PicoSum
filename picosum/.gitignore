@@ -1,0 +1,39 @@
+# Binaires Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/web-app/web-app
+/api-service/api-service
+/oauth-server/oauth-server
+
+# Fichiers de test Go
+*.test
+*.out
+
+# Dossiers de build
+vendor/
+
+# Fichiers de débogage
+*.pprof
+
+# Éditeurs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Logs
+*.log
+
+# Variables d'environnement sensibles (token, secrets)
+.env
+*.env.local

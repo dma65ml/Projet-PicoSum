@@ -1,0 +1,26 @@
+Status,File,Priority,Lines,Complexity,Depends On,What It Does,Key Functions,Imports,Exports,Tests Required
+TODO,web-app/go.mod,CRITICAL,15,Low,,Déclare les dépendances Go pour web-app,,"fmt, github.com/gofiber/fiber/v2, github.com/gofiber/template/html/v2","go.mod",Test non applicable
+TODO,web-app/main.go,CRITICAL,60,Medium,web-app/go.mod,Point d'entrée du web-app ; configure Fiber, middleware, routes, static files,main(), setupRoutes(),,fiber, log/slog, net/http,Main,Test avec app.Test()
+TODO,web-app/middleware/request_id.go,HIGH,25,Low,,Middleware pour générer/transmettre X-Request-ID,RequestIDMiddleware(),,fiber, log/slog,RequestIDMiddleware,Test unitaire (vérifie présence en-tête)
+TODO,web-app/handlers/calc.go,CRITICAL,50,Medium,web-app/middleware/request_id.go,Handler /sum : reçoit a et b via HTMX, appelle API, renvoie résultat ou erreur,HandleSum(),GetSumFromAPI(),,fiber, net/http, encoding/json,HandleSum,Test avec mock du client HTTP
+TODO,web-app/internal/client/api_client.go,HIGH,40,Medium,web-app/go.mod,Client HTTP pour appeler api-service avec token et X-Request-ID,NewClient(), CallSum(),,net/http, context, encoding/json,CallSum,Test unitaire avec serveur de test
+TODO,web-app/static/index.html,CRITICAL,80,Low,,Page HTML principale avec Alpine.js, HTMX, Pico.css ; formulaire A/B, résultat,index.html,,,N/A,Test visuel manuel
+TODO,web-app/static/pico.min.css,MEDIUM,1,Low,,Fichier CSS Pico.css (version minifiée),,,,N/A,Tests non applicables
+TODO,web-app/static/alpine.min.js,MEDIUM,1,Low,,Fichier Alpine.js (CDN ou embarqué),,,,N/A,Tests non applicables
+TODO,web-app/Dockerfile,CRITICAL,30,Low,,Construction de l'image Docker multi-stage pour web-app,,,Docker,,Test avec docker build
+TODO,api-service/go.mod,CRITICAL,15,Low,,Déclare les dépendances Go pour api-service,,"github.com/gofiber/fiber/v2, github.com/swaggo/swag, github.com/swaggo/fiber-swagger",go.mod,Tests non applicable
+TODO,api-service/main.go,CRITICAL,60,Medium,api-service/go.mod,Point d'entrée ; configure routes, middleware auth, Swagger,main(), setupRoutes(),,fiber, log/slog, swagger,Main,Test avec app.Test()
+TODO,api-service/middleware/request_id.go,HIGH,25,Low,,Middleware X-Request-ID (identique à web-app),RequestIDMiddleware(),,fiber,RequestIDMiddleware,Test unitaire
+TODO,api-service/middleware/auth.go,CRITICAL,30,Low,api-service/go.mod,Valide le token Bearer (fixe ou via serveur OAuth),AuthMiddleware(),,fiber, strings,AuthMiddleware,Test unitaire (token valide/invalide)
+TODO,api-service/handlers/sum.go,CRITICAL,50,Medium,api-service/middleware/auth.go,Handler /sum : valide a,b (0-10), calcule somme, retourne JSON,SumHandler(),validateBounds(),,fiber, strconv,SumHandler,Test unitaire avec validation bornes et calcul
+TODO,api-service/internal/calculator/sum.go,HIGH,15,Low,,Fonction pure de calcul de somme,Add(),,,"Add",Test unitaire simple
+TODO,api-service/docs/docs.go,MEDIUM,1,Low,api-service/handlers/sum.go,Généré par swag init ; documentation Swagger,,,,"docs",Test non applicable (vérifier génération)
+TODO,api-service/Dockerfile,CRITICAL,30,Low,,Multi-stage Docker pour api-service,,,Docker,,Test docker build
+TODO,oauth-server/go.mod,CRITICAL,10,Low,,Dépendances du serveur OAuth simpliste,,"github.com/gofiber/fiber/v2",go.mod,Tests non applicable
+TODO,oauth-server/main.go,HIGH,40,Medium,oauth-server/go.mod,Serveur OAuth minimal : endpoint /token retourne un token fixe,main(), tokenHandler(),,fiber, log/slog,Main,Test avec requête POST
+TODO,oauth-server/Dockerfile,MEDIUM,25,Low,,Dockerfile pour oauth-server,,,Docker,,Test docker build
+TODO,docker-compose.yml,CRITICAL,50,Medium,"web-app/Dockerfile, api-service/Dockerfile, oauth-server/Dockerfile",Orchestration des trois services,definition des services, réseaux, volumes,,docker-compose,,Test avec docker-compose up
+TODO,tests/unit/web-app/handlers/calc_test.go,HIGH,50,Medium,web-app/handlers/calc.go,Test unitaire du handler calc avec mock de l'API client,TestHandleSum(),,testing, testify, net/http/httptest,TestHandleSum,Test exécutable
+TODO,tests/unit/api-service/handlers/sum_test.go,CRITICAL,60,Medium,api-service/handlers/sum.go,Test unitaire du handler sum (validation, calcul, erreurs),TestSumHandler(),,testing, testify, fiber,TestSumHandler,Test exécutable
+TODO,tests/unit/api-service/middleware/auth_test.go,HIGH,40,Low,api-service/middleware/auth.go,Test de la validation du token,TestAuthMiddleware(),,testing, testify, fiber,TestAuthMiddleware,Test exécutable
+TODO,tests/unit/calculator/sum_test.go,HIGH,15,Low,api-service/internal/calculator/sum.go,Test de la fonction Add,TestAdd(),,testing, testify,TestAdd,Test exécutable

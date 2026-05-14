@@ -1,0 +1,24 @@
+/* Styles spécifiques à PicoSum — externalisés pour permettre une CSP sans unsafe-inline (N4) */
+
+body { padding-top: 2rem; }
+
+.app-container { max-width: 520px; }
+
+#result {
+    min-height: 2rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-top: 1rem;
+}
+
+.htmx-request #result { opacity: 0.5; }
+
+.error-msg {
+    color: var(--pico-del-color, red);
+    font-size: 0.85em;
+    margin-top: 0.25rem;
+    display: none;
+}
+
+/* A1 : classe pour les réponses d'erreur serveur (remplace les style= inline bloqués par la CSP) */
+.error-response { color: var(--pico-del-color, red); }

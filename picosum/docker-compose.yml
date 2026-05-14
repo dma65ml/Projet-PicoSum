@@ -1,0 +1,46 @@
+version: '3.8'
+
+# Créez un fichier .env à partir de .env.example avant de lancer docker-compose.
+# API_TOKEN doit être défini — sinon le service démarre en mode développement avec un
+# token par défaut et émet un avertissement dans les logs (voir auth.go).
+
+services:
+  web:
+    build: ./web-app
+    ports:
+      - "8080:8080"          # Seul service exposé publiquement
+    environment:
+      - API_URL=http://api:8081
+      - API_TOKEN=${API_TOKEN}   # N3 : pas de valeur de fallback en clair ici
+      - OAUTH_URL=http://oauth:8082
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TRUSTED_PROXY_HEADER=${TRUSTED_PROXY_HEADER:-}
+    depends_on:
+      - api
+    networks:
+      - poc-net
+
+  api:
+    build: ./api-service
+    ports:
+      - "127.0.0.1:8081:8081"  # Lié à localhost uniquement
+    environment:
+      - API_TOKEN=${API_TOKEN}   # N3 : pas de valeur de fallback en clair ici
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TRUSTED_PROXY_HEADER=${TRUSTED_PROXY_HEADER:-}
+    networks:
+      - poc-net
+
+  oauth:
+    build: ./oauth-server
+    ports:
+      - "127.0.0.1:8082:8082"  # Lié à localhost uniquement
+    environment:
+      - API_TOKEN=${API_TOKEN}   # N3 : pas de valeur de fallback en clair ici
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    networks:
+      - poc-net
+
+networks:
+  poc-net:
+    driver: bridge
