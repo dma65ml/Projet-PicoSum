@@ -1,82 +1,111 @@
-version: '3.8'
-
-# Créez un fichier .env à partir de .env.example avant de lancer docker-compose.
-# API_TOKEN doit être défini — sinon le service démarre en mode développement avec un
-# token par défaut et émet un avertissement dans les logs (voir auth.go).
+# docker-compose.yml — Orchestration locale de PicoSum
 #
-# Point d'entrée unique : Caddy (port 80).
-#   http://localhost/           → web-app
-#   http://localhost/swagger/*  → api-service (documentation Swagger)
+# Docker Compose démarre tous les services en une seule commande et gère le
+# réseau interne entre conteneurs. Chaque service correspond à un conteneur
+# Docker construit depuis son Dockerfile (multi-stage : build + image finale scratch).
+#
+# Avant de démarrer :
+#   cp .env.example .env   # puis éditez .env avec un vrai API_TOKEN
+#   docker-compose up --build
+#
+# Point d'entrée unique : http://localhost (port 80, géré par Caddy).
+#   /           → web-app (interface utilisateur)
+#   /swagger/*  → api-service (documentation Swagger)
+
+version: '3.8'
 
 services:
 
-  # ── Reverse proxy ────────────────────────────────────────────────────────
+  # ── Reverse proxy ─────────────────────────────────────────────────────────
+  # Caddy est le seul conteneur exposé sur le réseau hôte.
+  # Il route les requêtes vers web-app et api-service selon le chemin URL.
+  # En production VPS : décommenter le port 443 et remplacer ":80" par votre
+  # domaine dans le Caddyfile → HTTPS automatique via Let's Encrypt / ZeroSSL.
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine          # Image officielle Caddy (Alpine = légère)
     ports:
-      - "80:80"
-      # - "443:443"  # Décommenter pour HTTPS automatique sur VPS (Let's Encrypt)
+      - "80:80"                    # HTTP local (POC)
+      # - "443:443"                # HTTPS production (décommenter + modifier Caddyfile)
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data      # Certificats TLS persistants (Let's Encrypt / ZeroSSL)
-      - caddy_config:/config  # Cache de configuration interne Caddy
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro  # :ro = lecture seule dans le conteneur
+      - caddy_data:/data           # Certificats TLS persistants (Let's Encrypt / ZeroSSL)
+      - caddy_config:/config       # Cache de configuration interne Caddy
     depends_on:
       - web
       - api
     networks:
       - poc-net
-    restart: unless-stopped
+    restart: unless-stopped        # Redémarre automatiquement sauf arrêt manuel
 
-  # ── Application web ───────────────────────────────────────────────────────
+  # ── Application web ────────────────────────────────────────────────────────
+  # Sert l'interface HTML/HTMX. Ne reçoit les requêtes que via Caddy.
+  # Les assets statiques (pico.css, htmx.js, app.js) sont embarqués dans le binaire
+  # Go via //go:embed — pas de volume ni de copie de fichiers au runtime.
   web:
     build: ./web-app
-    # Pas de port exposé directement — accessible uniquement via Caddy.
-    # Pour un accès direct en développement : décommenter la ligne ci-dessous.
+    # Pas de port exposé publiquement : web-app est uniquement accessible
+    # depuis le réseau interne poc-net (via Caddy ou api).
+    # Pour un accès direct en développement, décommenter :
     # ports:
     #   - "127.0.0.1:8080:8080"
     environment:
-      - API_URL=http://api:8081
-      - API_TOKEN=${API_TOKEN}        # N3 : pas de valeur de fallback en clair ici
+      - API_URL=http://api:8081        # Nom de service Docker Compose = hostname DNS interne
+      - API_TOKEN=${API_TOKEN}         # Lu depuis .env — jamais de valeur en dur ici
       - OAUTH_URL=http://oauth:8082
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TRUSTED_PROXY_HEADER=X-Forwarded-For  # Caddy propage cet en-tête
+      - LOG_LEVEL=${LOG_LEVEL:-info}   # Syntaxe ${VAR:-défaut} : "info" si LOG_LEVEL absent
+      - TRUSTED_PROXY_HEADER=X-Forwarded-For  # Caddy propage cet en-tête avec l'IP réelle
     depends_on:
-      - api
+      - api                        # Docker Compose démarre api avant web (ordre, pas santé)
     networks:
       - poc-net
     restart: unless-stopped
 
-  # ── API service ───────────────────────────────────────────────────────────
+  # ── API service ────────────────────────────────────────────────────────────
+  # Expose GET /sum (protégé par token) et GET /swagger/* (documentation).
+  # Swagger est proxifié par Caddy sur /swagger/* → accessible via http://localhost/swagger/.
   api:
     build: ./api-service
-    # Lié à localhost pour accès direct en développement (swag, curl).
-    # En production, supprimer ce bloc ports et passer uniquement par Caddy.
+    # Accès direct 127.0.0.1 uniquement : utile en développement pour tester
+    # l'API avec curl ou un client REST sans passer par Caddy.
+    # En production, supprimer ce bloc ports.
     ports:
       - "127.0.0.1:8081:8081"
     environment:
-      - API_TOKEN=${API_TOKEN}        # N3 : pas de valeur de fallback en clair ici
+      - API_TOKEN=${API_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TRUSTED_PROXY_HEADER=X-Forwarded-For  # Caddy propage cet en-tête
+      - TRUSTED_PROXY_HEADER=X-Forwarded-For
     networks:
       - poc-net
     restart: unless-stopped
 
-  # ── OAuth server ──────────────────────────────────────────────────────────
+  # ── OAuth server ───────────────────────────────────────────────────────────
+  # Implémentation minimale du flux OAuth2 "client_credentials" (RFC 6749).
+  # Délivre un token fixe lire depuis API_TOKEN. En production, remplacer
+  # par un vrai serveur OAuth2 (Keycloak, Auth0, Dex…).
   oauth:
     build: ./oauth-server
     ports:
-      - "127.0.0.1:8082:8082"  # Accès direct en développement uniquement
+      - "127.0.0.1:8082:8082"     # Accès direct en développement uniquement
     environment:
-      - API_TOKEN=${API_TOKEN}        # N3 : pas de valeur de fallback en clair ici
+      - API_TOKEN=${API_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     networks:
       - poc-net
     restart: unless-stopped
 
+# ── Réseau interne ─────────────────────────────────────────────────────────
+# Un réseau bridge dédié isole les conteneurs PicoSum du reste de Docker.
+# Les services se joignent par leur nom (ex. "api", "web") comme hostnames DNS.
+# Seul Caddy a un port exposé sur l'hôte — les autres ne sont pas accessibles
+# depuis l'extérieur du réseau Docker (sauf les ports 127.0.0.1 de dev).
 networks:
   poc-net:
     driver: bridge
 
+# ── Volumes persistants ────────────────────────────────────────────────────
+# Permettent à Caddy de conserver les certificats TLS entre les redémarrages.
+# En mode HTTP local (POC), ces volumes existent mais restent vides.
+# En production HTTPS, caddy_data contiendra les certificats Let's Encrypt.
 volumes:
-  caddy_data:    # Persistance des certificats TLS (vide en mode HTTP local)
+  caddy_data:
   caddy_config:
