@@ -1,36 +1,150 @@
 <!DOCTYPE html>
+<!--
+  index.html — Interface utilisateur de PicoSum
+
+  Architecture de la page :
+  ─────────────────────────
+  Ce fichier HTML est servi par la web-app Go (via //go:embed) à la route GET /.
+  Tous les assets (CSS, JS) sont aussi embarqués dans le binaire Go et servis
+  sous /static/ — aucune dépendance à un CDN externe.
+
+  Pourquoi pas de <style> ni de onclick="..." dans ce fichier ?
+  La Content Security Policy (CSP) du serveur interdit :
+    - style-src : pas de <style>...</style> ni style="..." inline
+    - script-src : pas de <script>...</script> inline ni onclick="..."
+  Tout le CSS est dans app.css et pico.min.css.
+  Tout le JS est dans app.js (HTMX est dans htmx.min.js).
+
+  Bibliothèques utilisées :
+    - Pico.css  : framework CSS classless (pas de classes utility comme Tailwind).
+                  Il stylise directement les éléments HTML sémantiques (<form>,
+                  <input>, <button>, <article>…) sans ajouter de classes.
+    - HTMX      : bibliothèque JS (~14 Ko) qui ajoute des capacités AJAX au HTML
+                  via des attributs hx-*. Pas de JS à écrire pour les appels réseau.
+    - app.js    : validation locale maison (remplace Alpine.js, voir app.js).
+-->
 <html lang="fr" data-theme="light">
+<!--
+  lang="fr" : indique la langue au navigateur et aux lecteurs d'écran (accessibilité).
+  data-theme="light" : attribut Pico.css qui active le thème clair.
+  Pico supporte "light" et "dark" ; la valeur peut être changée dynamiquement par JS.
+-->
 <head>
     <meta charset="UTF-8">
+    <!--
+      viewport meta : indispensable pour le responsive design sur mobile.
+      width=device-width  → la largeur de la page = largeur de l'écran (pas 980px par défaut).
+      initial-scale=1     → pas de zoom initial (ratio 1:1 pixel CSS / pixel physique).
+      Sans cette balise, les navigateurs mobiles réduisent la page pour la faire tenir
+      sur l'écran, rendant le texte illisible sans zoom manuel.
+    -->
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PicoSum – Calculatrice</title>
-    <!-- N4 : plus de balise <style> inline — styles dans app.css pour CSP sans unsafe-inline -->
+
+    <!--
+      Ordre des feuilles de style : pico.min.css en premier (styles de base),
+      app.css en second (surcharges spécifiques à PicoSum).
+      L'ordre est important : app.css peut écraser les règles de Pico grâce
+      à la cascade CSS (d'où le nom "Cascading Style Sheets").
+    -->
     <link rel="stylesheet" href="/static/pico.min.css">
     <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+    <!--
+      <main> : élément sémantique HTML5 qui marque le contenu principal de la page.
+      Un seul <main> par page — les lecteurs d'écran et les moteurs de recherche
+      l'utilisent pour identifier le contenu pertinent.
+
+      class="container" : classe Pico.css qui centre le contenu et ajoute
+      des marges latérales adaptées à la largeur de l'écran.
+      class="app-container" : notre classe CSS (app.css) qui limite la largeur à 520px.
+    -->
     <main class="container app-container">
+
+        <!--
+          <hgroup> : groupe d'en-têtes HTML5. Associe un titre principal (<h1>)
+          à son sous-titre (<p>) pour que les outils d'accessibilité et les
+          moteurs de recherche comprennent qu'ils forment une unité.
+          Pico.css stylise hgroup avec des espacements adaptés.
+        -->
         <hgroup>
             <h1>PicoSum</h1>
             <p>Démonstration d'une architecture microservices Go (POC)</p>
         </hgroup>
 
+        <!--
+          <article> : élément sémantique HTML5 pour un contenu autonome.
+          Pico.css lui applique un fond de carte avec ombre et padding.
+          Utilisé ici comme conteneur visuel du formulaire.
+        -->
         <article>
-            <!-- N4 : pas d'attributs oninput="..." inline — événements attachés dans app.js -->
+            <!--
+              Formulaire HTMX — attributs hx-* :
+
+              hx-post="/sum"
+                HTMX intercepte la soumission et envoie une requête POST /sum
+                en Ajax (fetch) au lieu de recharger la page.
+                Les données sont envoyées en application/x-www-form-urlencoded
+                (format standard des formulaires HTML).
+
+              hx-target="#result"
+                La réponse du serveur (fragment HTML) remplace le contenu de #result.
+                HTMX ne recharge pas la page entière — seul ce fragment est mis à jour.
+
+              hx-swap="innerHTML"
+                "innerHTML" : remplace le contenu intérieur de #result (pas l'élément lui-même).
+                Autres valeurs possibles : "outerHTML", "beforeend", "afterend"…
+
+              hx-indicator="#result"
+                Pendant la requête, HTMX ajoute la classe "htmx-request" sur #result.
+                app.css exploite cette classe pour réduire l'opacité (feedback visuel).
+            -->
             <form hx-post="/sum"
                   hx-target="#result"
                   hx-swap="innerHTML"
                   hx-indicator="#result">
 
+                <!--
+                  class="grid" : classe Pico.css qui place les enfants directs
+                  côte à côte en CSS Grid (colonnes égales, responsive).
+                  Sur mobile (écran étroit), les colonnes passent automatiquement
+                  en empilement vertical.
+                -->
                 <div class="grid">
+
+                    <!--
+                      <label> enveloppant l'<input> : pratique d'accessibilité.
+                      Cliquer sur le texte du label active le champ input associé.
+                      Pas besoin de l'attribut for/id quand le label enveloppe l'input.
+                    -->
                     <label>
                         Valeur A (0 – 10)
+                        <!--
+                          type="number" : champ numérique natif du navigateur.
+                          Le navigateur affiche des flèches incrément/décrément
+                          et n'accepte que des nombres en entrée mobile (clavier numérique).
+                          min/max : bornes pour les flèches et la validation HTML native.
+                          required : le formulaire ne peut pas être soumis si vide
+                          (validation HTML5 côté client, sans JS).
+
+                          Note : type="number" retourne toujours une chaîne en JS
+                          (element.value est toujours un string), d'où le Number()
+                          dans isValidBound() de app.js.
+                        -->
                         <input type="number"
                                id="input-a"
                                name="a"
                                min="0" max="10"
                                placeholder="ex: 5"
                                required>
+                        <!--
+                          Message d'erreur de validation locale.
+                          display:none par défaut (via .error-msg dans app.css).
+                          app.js l'affiche si la valeur est hors de [0, 10].
+                          <small> : élément sémantique pour les annotations secondaires.
+                          Pico.css le stylise avec une taille et une couleur réduites.
+                        -->
                         <small id="a-error" class="error-msg">
                             A doit être un entier entre 0 et 10
                         </small>
@@ -50,17 +164,48 @@
                     </label>
                 </div>
 
+                <!--
+                  Bouton désactivé par défaut (disabled).
+                  app.js l'active uniquement quand A et B sont tous les deux valides.
+                  HTMX respecte l'attribut disabled : il ne soumet pas le formulaire
+                  si le bouton de soumission est désactivé.
+                  Pico.css applique automatiquement un style grisé aux boutons disabled.
+                -->
                 <button id="submit-btn" type="submit" disabled>
                     Calculer A + B
                 </button>
             </form>
 
+            <!--
+              Zone de résultat HTMX.
+
+              role="status" : rôle ARIA qui indique aux lecteurs d'écran que cette
+              zone peut se mettre à jour dynamiquement. Le lecteur annonce les
+              changements sans que l'utilisateur ait à naviguer vers la zone.
+
+              aria-live="polite" : le lecteur d'écran attend la fin de la lecture
+              en cours avant d'annoncer le nouveau contenu ("polite" = non-interruptif).
+              La valeur "assertive" interromprait la lecture immédiatement (à éviter
+              sauf pour les alertes critiques).
+
+              Initialement vide : HTMX y injecte les fragments HTML du serveur
+              (<strong>✓ 3 + 4 = 7</strong> ou <span class="error-response">…</span>).
+            -->
             <div id="result" role="status" aria-live="polite"></div>
         </article>
 
         <footer>
             <small>
-                <a href="http://localhost:8081/swagger/index.html"
+                <!--
+                  Lien vers la documentation Swagger de l'api-service.
+                  target="_blank" : ouvre dans un nouvel onglet.
+                  rel="noopener noreferrer" : sécurité obligatoire avec target="_blank".
+                    - noopener  : empêche la page ouverte d'accéder à window.opener
+                      (la page courante) — protège contre le "reverse tabnapping".
+                    - noreferrer : n'envoie pas l'en-tête HTTP Referer au site cible
+                      (confidentialité de la navigation).
+                -->
+                <a href="/swagger/index.html"
                    target="_blank" rel="noopener noreferrer">
                     Documentation API Swagger ↗
                 </a>
@@ -68,7 +213,17 @@
         </footer>
     </main>
 
-    <!-- N4 : HTMX seul, Alpine.js supprimé (plus besoin de unsafe-eval) -->
+    <!--
+      Chargement des scripts en bas de <body>.
+      Placer les <script> après le contenu HTML garantit que le DOM est déjà
+      construit quand les scripts s'exécutent. C'est la technique classique
+      (alternative moderne : <script defer> dans <head>).
+
+      Ordre important :
+        1. htmx.min.js : doit être chargé AVANT app.js car app.js utilise
+           htmx.config (objet global exposé par HTMX).
+        2. app.js : configure HTMX et attache les écouteurs de validation.
+    -->
     <script src="/static/htmx.min.js"></script>
     <script src="/static/app.js"></script>
 </body>

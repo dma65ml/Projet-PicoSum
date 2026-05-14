@@ -1,9 +1,43 @@
-/* Styles spécifiques à PicoSum — externalisés pour permettre une CSP sans unsafe-inline (N4) */
+/*
+ * app.css — Styles spécifiques à PicoSum
+ *
+ * Pourquoi ce fichier existe-t-il ?
+ * ----------------------------------
+ * La Content Security Policy (CSP) du serveur interdit les styles inline :
+ *   - Les attributs style="color:red" dans le HTML sont bloqués par "style-src 'self'".
+ *   - Les balises <style>...</style> dans le HTML sont également bloquées.
+ * Tous les styles doivent donc être dans des fichiers .css servis par ce serveur.
+ *
+ * Ce fichier complète pico.min.css (le framework CSS de base) avec les styles
+ * propres à l'application. Pico.css gère la mise en page générale (typographie,
+ * formulaires, boutons) ; app.css n'ajoute que ce que Pico ne couvre pas.
+ *
+ * Variables CSS de Pico (var(--pico-*)) :
+ * Pico.css expose ses couleurs et espacements comme variables CSS personnalisées.
+ * Les réutiliser garantit la cohérence visuelle avec le thème Pico (light/dark).
+ * La syntaxe var(--pico-del-color, red) signifie : utilise --pico-del-color si elle
+ * existe, sinon utilise red comme valeur de repli (fallback).
+ */
 
+/* Corps de page : décalage vertical pour ne pas coller au bord supérieur. */
 body { padding-top: 2rem; }
 
+/*
+ * .app-container — contrainte la largeur maximale du contenu principal.
+ * max-width est préférable à width fixe : sur les petits écrans, le contenu
+ * s'adapte (responsive) ; sur les grands écrans, il reste centré et lisible.
+ * 520px est une largeur confortable pour un formulaire à deux champs côte à côte.
+ */
 .app-container { max-width: 520px; }
 
+/*
+ * #result — zone d'affichage du résultat HTMX.
+ *
+ * HTMX injecte la réponse serveur (fragment HTML) dans cet élément via hx-target="#result".
+ * min-height évite le "saut de mise en page" (layout shift) lors de l'injection :
+ * la zone occupe de l'espace même vide, et le reste de la page ne se décale pas
+ * quand le contenu apparaît.
+ */
 #result {
     min-height: 2rem;
     padding: 0.5rem;
@@ -11,14 +45,47 @@ body { padding-top: 2rem; }
     margin-top: 1rem;
 }
 
+/*
+ * .htmx-request #result — indicateur de chargement pendant la requête HTMX.
+ *
+ * HTMX ajoute automatiquement la classe "htmx-request" sur l'élément portant
+ * hx-indicator (ici le formulaire) pendant qu'une requête est en cours.
+ * Le sélecteur CSS " .htmx-request #result" signifie : l'élément #result
+ * quand un ancêtre a la classe htmx-request.
+ *
+ * opacity: 0.5 assombrit visuellement #result pour signaler l'attente,
+ * sans masquer le contenu précédent ni bloquer l'interface.
+ * C'est plus léger qu'un spinner et ne nécessite pas de JS supplémentaire.
+ */
 .htmx-request #result { opacity: 0.5; }
 
+/*
+ * .error-msg — messages d'erreur de validation locale (côté client, via app.js).
+ *
+ * Ces éléments (<small> dans index.html) sont masqués par défaut (display:none).
+ * app.js les affiche dynamiquement via style.display = 'block' quand la valeur
+ * du champ est hors de la plage [0, 10].
+ *
+ * Ils sont distincts de .error-response (ci-dessous) qui affiche les erreurs
+ * venant du serveur. Cette séparation permet de styler les deux cas différemment
+ * si besoin (ex. icônes différentes, couleurs distinctes).
+ */
 .error-msg {
-    color: var(--pico-del-color, red);
-    font-size: 0.85em;
+    color: var(--pico-del-color, red); /* couleur d'erreur du thème Pico */
+    font-size: 0.85em;                 /* légèrement plus petit que le texte parent */
     margin-top: 0.25rem;
-    display: none;
+    display: none;                     /* masqué par défaut, affiché par app.js */
 }
 
-/* A1 : classe pour les réponses d'erreur serveur (remplace les style= inline bloqués par la CSP) */
+/*
+ * .error-response — fragment d'erreur retourné par le serveur (via HTMX).
+ *
+ * Quand le serveur répond avec un code 4xx ou 5xx, HTMX injecte le fragment HTML
+ * dans #result. Le serveur Go (calc.go) retourne des <span class="error-response">
+ * au lieu de style="color:..." (interdit par la CSP style-src 'self').
+ *
+ * Cette classe est la seule façon de colorer les erreurs serveur tout en
+ * respectant la CSP : le style est ici dans le fichier CSS autorisé,
+ * pas dans l'attribut HTML inline bloqué.
+ */
 .error-response { color: var(--pico-del-color, red); }
