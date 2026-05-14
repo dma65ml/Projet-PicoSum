@@ -3,44 +3,80 @@ version: '3.8'
 # Créez un fichier .env à partir de .env.example avant de lancer docker-compose.
 # API_TOKEN doit être défini — sinon le service démarre en mode développement avec un
 # token par défaut et émet un avertissement dans les logs (voir auth.go).
+#
+# Point d'entrée unique : Caddy (port 80).
+#   http://localhost/           → web-app
+#   http://localhost/swagger/*  → api-service (documentation Swagger)
 
 services:
+
+  # ── Reverse proxy ────────────────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      # - "443:443"  # Décommenter pour HTTPS automatique sur VPS (Let's Encrypt)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # Certificats TLS persistants (Let's Encrypt / ZeroSSL)
+      - caddy_config:/config  # Cache de configuration interne Caddy
+    depends_on:
+      - web
+      - api
+    networks:
+      - poc-net
+    restart: unless-stopped
+
+  # ── Application web ───────────────────────────────────────────────────────
   web:
     build: ./web-app
-    ports:
-      - "8080:8080"          # Seul service exposé publiquement
+    # Pas de port exposé directement — accessible uniquement via Caddy.
+    # Pour un accès direct en développement : décommenter la ligne ci-dessous.
+    # ports:
+    #   - "127.0.0.1:8080:8080"
     environment:
       - API_URL=http://api:8081
-      - API_TOKEN=${API_TOKEN}   # N3 : pas de valeur de fallback en clair ici
+      - API_TOKEN=${API_TOKEN}        # N3 : pas de valeur de fallback en clair ici
       - OAUTH_URL=http://oauth:8082
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TRUSTED_PROXY_HEADER=${TRUSTED_PROXY_HEADER:-}
+      - TRUSTED_PROXY_HEADER=X-Forwarded-For  # Caddy propage cet en-tête
     depends_on:
       - api
     networks:
       - poc-net
+    restart: unless-stopped
 
+  # ── API service ───────────────────────────────────────────────────────────
   api:
     build: ./api-service
+    # Lié à localhost pour accès direct en développement (swag, curl).
+    # En production, supprimer ce bloc ports et passer uniquement par Caddy.
     ports:
-      - "127.0.0.1:8081:8081"  # Lié à localhost uniquement
+      - "127.0.0.1:8081:8081"
     environment:
-      - API_TOKEN=${API_TOKEN}   # N3 : pas de valeur de fallback en clair ici
+      - API_TOKEN=${API_TOKEN}        # N3 : pas de valeur de fallback en clair ici
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TRUSTED_PROXY_HEADER=${TRUSTED_PROXY_HEADER:-}
+      - TRUSTED_PROXY_HEADER=X-Forwarded-For  # Caddy propage cet en-tête
     networks:
       - poc-net
+    restart: unless-stopped
 
+  # ── OAuth server ──────────────────────────────────────────────────────────
   oauth:
     build: ./oauth-server
     ports:
-      - "127.0.0.1:8082:8082"  # Lié à localhost uniquement
+      - "127.0.0.1:8082:8082"  # Accès direct en développement uniquement
     environment:
-      - API_TOKEN=${API_TOKEN}   # N3 : pas de valeur de fallback en clair ici
+      - API_TOKEN=${API_TOKEN}        # N3 : pas de valeur de fallback en clair ici
       - LOG_LEVEL=${LOG_LEVEL:-info}
     networks:
       - poc-net
+    restart: unless-stopped
 
 networks:
   poc-net:
     driver: bridge
+
+volumes:
+  caddy_data:    # Persistance des certificats TLS (vide en mode HTTP local)
+  caddy_config:

@@ -1,0 +1,69 @@
+# PicoSum — Configuration Caddy (reverse proxy)
+#
+# Mode local POC : Caddy écoute sur le port 80 sans TLS.
+# Pour activer le HTTPS automatique sur un VPS, voir le bloc commenté en bas de fichier.
+
+:80 {
+	# Documentation Swagger : /swagger/* → api-service
+	@swagger path /swagger/*
+	reverse_proxy @swagger api:8081
+
+	# Interface utilisateur : tout le reste → web-app
+	reverse_proxy web:8080
+
+	# Journalisation structurée JSON (cohérente avec log/slog des services Go)
+	log {
+		output stdout
+		format json
+	}
+
+	# En-têtes de sécurité ajoutés au niveau du proxy.
+	# Les services Go posent déjà leurs propres en-têtes ; Caddy sert ici de
+	# filet de sécurité pour les routes qu'il gère en propre (ex. erreurs 502).
+	header {
+		X-Content-Type-Options  "nosniff"
+		X-Frame-Options         "DENY"
+		Referrer-Policy         "strict-origin-when-cross-origin"
+		# Strict-Transport-Security n'est posé qu'en HTTPS (voir bloc VPS ci-dessous).
+		-Server  # retire l'en-tête "Server: Caddy" pour limiter la divulgation d'info
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DÉPLOIEMENT VPS — HTTPS AUTOMATIQUE (Let's Encrypt / ZeroSSL)
+#
+# Prérequis :
+#   1. Enregistrement DNS A/AAAA du domaine pointant vers l'IP publique du VPS.
+#   2. Ports 80 et 443 ouverts dans le pare-feu (80 requis pour le challenge ACME).
+#   3. Dans docker-compose.yml, décommenter le port "443:443" du service caddy.
+#
+# Activation :
+#   - Remplacez "picosum.example.com" par votre domaine réel.
+#   - Supprimez (ou commentez) le bloc ":80" ci-dessus.
+#   - Caddy obtient et renouvelle le certificat automatiquement via Let's Encrypt.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# picosum.example.com {
+# 	@swagger path /swagger/*
+# 	reverse_proxy @swagger api:8081
+# 	reverse_proxy web:8080
+#
+# 	log {
+# 		output stdout
+# 		format json
+# 	}
+#
+# 	header {
+# 		X-Content-Type-Options  "nosniff"
+# 		X-Frame-Options         "DENY"
+# 		Referrer-Policy         "strict-origin-when-cross-origin"
+# 		# HSTS activé automatiquement par Caddy en HTTPS — on le renforce ici.
+# 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+# 		-Server
+# 	}
+#
+# 	# ZeroSSL comme CA alternatif à Let's Encrypt (même protocole ACME) :
+# 	# tls {
+# 	#     ca https://acme.zerossl.com/v2/DV90
+# 	# }
+# }
